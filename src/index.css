@@ -2,9 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Memberikan latar belakang abu-abu gelap dan font default untuk aplikasi */
+/* Memberikan latar belakang gradasi dan font default untuk aplikasi */
 body {
-  background-color: #2D3748; /* Warna abu-abu gelap */
+  background: linear-gradient(135deg, #3a4759 0%, #1c2532 100%);
   font-family: 'Poppins', sans-serif;
+  color: #E2E8F0; /* Warna teks default yang lebih terang */
 }
 
+/* Kelas utility untuk efek glassmorphism */
+@layer components {
+  .glassmorphism {
+    background: rgba(45, 55, 72, 0.25); /* Latar belakang semi-transparan */
+    backdrop-filter: blur(10px); /* Efek blur */
+    -webkit-backdrop-filter: blur(10px); /* Dukungan untuk Safari */
+    @apply rounded-2xl border border-white/20 shadow-lg; /* Menggunakan apply untuk tailwind class */
+  }
+}
