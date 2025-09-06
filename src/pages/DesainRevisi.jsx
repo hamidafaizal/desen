@@ -1,74 +1,179 @@
-import { FiSearch, FiEdit, FiDownload, FiCheckCircle } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import { FiEdit, FiCheck } from 'react-icons/fi';
+import EditModal from '../modals/EditModal';
 
-// Data dummy untuk daftar desain revisi
-const dummyDesainRevisi = [
-  { id: 1, client: 'Warung Makan Sejahtera', tanggal: '01 Sep 2025', thumbnail: 'https://placehold.co/100x60/eab308/ffffff?text=Menu_V2', status: 'Revisi' },
-  { id: 2, client: 'PT. Angin Ribut', tanggal: '30 Agu 2025', thumbnail: 'https://placehold.co/100x60/eab308/ffffff?text=Logo_Rev1', status: 'Revisi' },
-];
-
-// Fungsi untuk mendapatkan warna status
-const getStatusClass = (status) => {
-  if (status === 'Revisi') {
-    return 'bg-orange-500/80';
-  }
-  return 'bg-gray-500/80';
-};
-
-// Komponen Halaman Daftar Desain Revisi
 function DesainRevisi() {
-  // Log untuk debugging saat komponen di-render
-  console.log("DesainRevisi page rendered");
+  const [desains, setDesains] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedDesain, setSelectedDesain] = useState(null);
+
+  // // Fungsi untuk mengambil data revisi dari Supabase
+  const getDesains = async () => {
+    console.log("Fetching revision designs for client...");
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("User tidak ditemukan.");
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('desains')
+      .select('*')
+      .eq('status', 'revisi')
+      .eq('user_id', user.id) // Filter berdasarkan user_id client yang login
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching designs:", error.message);
+      setError('Gagal memuat data desain revisi.');
+      setDesains([]);
+    } else {
+      console.log("Successfully fetched designs:", data);
+      setDesains(data);
+      setError('');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    getDesains();
+  }, []);
+
+  // // Fungsi untuk menyetujui revisi (mengubah status ke 'selesai')
+  const handleSetujui = async (id) => {
+    console.log(`Approving design with id: ${id}`);
+    const { error } = await supabase
+      .from('desains')
+      .update({ status: 'selesai' })
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error updating status:", error.message);
+      setError('Gagal menyetujui desain.');
+    } else {
+      console.log("Design approved successfully.");
+      setDesains(currentDesains => currentDesains.filter(d => d.id !== id));
+    }
+  };
+
+  // // Fungsi untuk menyimpan briefing dan file yang diedit
+  const handleSaveChanges = async (id, newBriefing, filesToUpdate) => {
+    console.log(`Saving changes for id: ${id}`);
+    try {
+      let newUploadedUrls = [];
+
+      // // Unggah file baru ke bucket 'desain-files'
+      if (filesToUpdate.new.length > 0) {
+        console.log(`Uploading ${filesToUpdate.new.length} new files to 'desain-files'.`);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User tidak login, tidak dapat mengunggah file.");
+
+        const uploadPromises = filesToUpdate.new.map(file => {
+          const fileName = `${user.id}/${id}/${Date.now()}-${file.name}`;
+          return supabase.storage.from('desain-files').upload(fileName, file);
+        });
+
+        const uploadResults = await Promise.all(uploadPromises);
+
+        for (const result of uploadResults) {
+          if (result.error) {
+            throw new Error(`Upload error: ${result.error.message}`);
+          }
+          const { data: urlData } = supabase.storage.from('desain-files').getPublicUrl(result.data.path);
+          newUploadedUrls.push(urlData.publicUrl);
+        }
+        console.log("New files uploaded successfully:", newUploadedUrls);
+      }
+
+      const finalFileUrls = [...filesToUpdate.current, ...newUploadedUrls];
+
+      // // Update database
+      const { error: dbError } = await supabase
+        .from('desains')
+        .update({
+          briefing: newBriefing,
+          files: finalFileUrls,
+          briefing_dilihat: false // Notifikasi untuk desainer
+        })
+        .eq('id', id);
+
+      if (dbError) {
+        throw new Error(`Database update error: ${dbError.message}`);
+      }
+
+      console.log("Briefing and files saved successfully.");
+      getDesains();
+      setSelectedDesain(null);
+
+    } catch (error) {
+      console.error("Error in handleSaveChanges:", error.message);
+      setError(`Gagal menyimpan perubahan: ${error.message}`);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white text-center">Daftar Desain Revisi</h1>
-
-      {/* Search Bar */}
-      <div className="relative">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Cari berdasarkan nama client..."
-          className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+    <div className="container mx-auto p-4">
+      {selectedDesain && (
+        <EditModal
+          isOpen={!!selectedDesain}
+          onClose={() => setSelectedDesain(null)}
+          onSave={handleSaveChanges}
+          desain={selectedDesain}
         />
-      </div>
+      )}
 
-      {/* List Desain */}
-      <div className="overflow-x-auto">
-        <div className="min-w-full bg-gray-700/30 rounded-lg p-1">
-          {dummyDesainRevisi.map((desain, index) => (
-            <div key={desain.id} className="flex items-center justify-between p-3 my-2 bg-gray-900/40 rounded-lg hover:bg-gray-900/60 transition-colors">
-              <div className="flex items-center space-x-4">
-                <span className="text-gray-400 font-semibold">{index + 1}.</span>
-                <div className="relative group">
-                  <img src={desain.thumbnail} alt="Thumbnail" className="w-24 h-14 object-cover rounded-md" />
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2 text-white hover:text-purple-400 transition-colors">
-                      <FiDownload size={20} />
+      <h1 className="text-3xl font-bold mb-6 text-white">Desain Revisi</h1>
+      {loading ? (
+        <p className="text-white">Loading...</p>
+      ) : error ? (
+        <p className="text-red-400">{error}</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {desains.length > 0 ? (
+            desains.map(desain => (
+              <div key={desain.id} className="glassmorphism rounded-lg overflow-hidden">
+                <img
+                  src={desain.hasil_desain && desain.hasil_desain.length > 0 ? desain.hasil_desain[desain.hasil_desain.length - 1] : 'https://placehold.co/600x400/27272a/FFF?text=No+Image'}
+                  alt={`Desain untuk ${desain.nama_client}`}
+                  className="w-full h-48 object-cover"
+                />
+                <div className="p-4">
+                  <h2 className="text-xl font-bold text-white">{desain.nama_client}</h2>
+                  <p className="text-sm text-gray-400 mb-2">
+                    {new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}
+                  </p>
+                  <span className="inline-block bg-yellow-500/20 text-yellow-300 text-xs font-semibold px-2 py-1 rounded-full capitalize">
+                    {desain.status}
+                  </span>
+                  <div className="flex justify-between items-center mt-4">
+                    <button
+                      onClick={() => setSelectedDesain(desain)}
+                      className="flex items-center space-x-2 px-3 py-2 bg-gray-600 rounded-md text-sm hover:bg-gray-700 transition-colors"
+                    >
+                      <FiEdit />
+                      <span>Edit Brief</span>
+                    </button>
+                    <button
+                      onClick={() => handleSetujui(desain.id)}
+                      className="flex items-center space-x-2 px-3 py-2 bg-green-600 rounded-md text-sm hover:bg-green-700 transition-colors"
+                    >
+                      <FiCheck />
+                      <span>Setujui</span>
                     </button>
                   </div>
                 </div>
-                <div>
-                  <p className="font-bold text-white">{desain.client}</p>
-                  <p className="text-sm text-gray-400">{desain.tanggal}</p>
-                  <span className={`text-xs text-white px-2 py-1 rounded-full ${getStatusClass(desain.status)}`}>
-                    {desain.status}
-                  </span>
-                </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <button className="p-2 text-gray-300 hover:text-white transition-colors">
-                  <FiEdit size={18} />
-                </button>
-                <button className="flex items-center space-x-2 px-3 py-2 text-sm bg-green-600/80 hover:bg-green-700/80 rounded-lg transition-colors">
-                  <FiCheckCircle size={16} />
-                  <span>Setujui</span>
-                </button>
-              </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-gray-400 col-span-full">Tidak ada desain yang perlu direvisi saat ini.</p>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
