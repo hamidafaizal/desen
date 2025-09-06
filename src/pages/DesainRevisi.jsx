@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { FiEdit, FiCheck } from 'react-icons/fi';
+import { FiEdit, FiCheck, FiDownload } from 'react-icons/fi';
 import EditModal from '../modals/EditModal';
 
 function DesainRevisi() {
@@ -9,7 +9,7 @@ function DesainRevisi() {
   const [error, setError] = useState('');
   const [selectedDesain, setSelectedDesain] = useState(null);
 
-  // // Fungsi untuk mengambil data revisi dari Supabase
+  // Fungsi untuk mengambil data revisi dari Supabase
   const getDesains = async () => {
     console.log("Fetching revision designs for client...");
     setLoading(true);
@@ -25,7 +25,7 @@ function DesainRevisi() {
       .from('desains')
       .select('*')
       .eq('status', 'revisi')
-      .eq('user_id', user.id) // Filter berdasarkan user_id client yang login
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -44,7 +44,7 @@ function DesainRevisi() {
     getDesains();
   }, []);
 
-  // // Fungsi untuk menyetujui revisi (mengubah status ke 'selesai')
+  // Fungsi untuk menyetujui revisi
   const handleSetujui = async (id) => {
     console.log(`Approving design with id: ${id}`);
     const { error } = await supabase
@@ -61,13 +61,12 @@ function DesainRevisi() {
     }
   };
 
-  // // Fungsi untuk menyimpan briefing dan file yang diedit
+  // Fungsi untuk menyimpan briefing dan file yang diedit
   const handleSaveChanges = async (id, newBriefing, filesToUpdate) => {
     console.log(`Saving changes for id: ${id}`);
     try {
       let newUploadedUrls = [];
 
-      // // Unggah file baru ke bucket 'desain-files'
       if (filesToUpdate.new.length > 0) {
         console.log(`Uploading ${filesToUpdate.new.length} new files to 'desain-files'.`);
         const { data: { user } } = await supabase.auth.getUser();
@@ -92,13 +91,12 @@ function DesainRevisi() {
 
       const finalFileUrls = [...filesToUpdate.current, ...newUploadedUrls];
 
-      // // Update database
       const { error: dbError } = await supabase
         .from('desains')
         .update({
           briefing: newBriefing,
           files: finalFileUrls,
-          briefing_dilihat: false // Notifikasi untuk desainer
+          briefing_dilihat: false
         })
         .eq('id', id);
 
@@ -113,6 +111,17 @@ function DesainRevisi() {
     } catch (error) {
       console.error("Error in handleSaveChanges:", error.message);
       setError(`Gagal menyimpan perubahan: ${error.message}`);
+    }
+  };
+  
+  // Fungsi untuk mendapatkan nama file dari URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const urlObject = new URL(url);
+      const pathParts = urlObject.pathname.split('/');
+      return decodeURIComponent(pathParts[pathParts.length - 1]);
+    } catch (e) {
+      return 'file-tidak-dikenal';
     }
   };
 
@@ -136,21 +145,46 @@ function DesainRevisi() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {desains.length > 0 ? (
             desains.map(desain => (
-              <div key={desain.id} className="glassmorphism rounded-lg overflow-hidden">
+              <div key={desain.id} className="glassmorphism rounded-lg overflow-hidden flex flex-col">
                 <img
                   src={desain.hasil_desain && desain.hasil_desain.length > 0 ? desain.hasil_desain[desain.hasil_desain.length - 1] : 'https://placehold.co/600x400/27272a/FFF?text=No+Image'}
                   alt={`Desain untuk ${desain.nama_client}`}
                   className="w-full h-48 object-cover"
                 />
-                <div className="p-4">
+                <div className="p-4 flex flex-col flex-grow">
                   <h2 className="text-xl font-bold text-white">{desain.nama_client}</h2>
                   <p className="text-sm text-gray-400 mb-2">
                     {new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}
                   </p>
-                  <span className="inline-block bg-yellow-500/20 text-yellow-300 text-xs font-semibold px-2 py-1 rounded-full capitalize">
+                  <span className="inline-block bg-yellow-500/20 text-yellow-300 text-xs font-semibold px-2 py-1 rounded-full capitalize self-start">
                     {desain.status}
                   </span>
-                  <div className="flex justify-between items-center mt-4">
+                  
+                  {/* // Bagian Download File */}
+                  <div className="mt-4 border-t border-white/10 pt-4 mb-4">
+                    <h3 className="text-sm font-semibold text-gray-300 mb-2">File Hasil Desain:</h3>
+                    <div className="flex flex-col space-y-2 max-h-24 overflow-y-auto">
+                      {desain.hasil_desain && desain.hasil_desain.length > 0 ? (
+                        desain.hasil_desain.map((fileUrl, index) => (
+                          <a
+                            key={index}
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="flex items-center space-x-2 text-indigo-400 hover:underline"
+                          >
+                            <FiDownload size={16} />
+                            <span className="truncate">{getFileNameFromUrl(fileUrl)}</span>
+                          </a>
+                        ))
+                      ) : (
+                        <p className="text-xs text-gray-500">Belum ada hasil desain.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-auto">
                     <button
                       onClick={() => setSelectedDesain(desain)}
                       className="flex items-center space-x-2 px-3 py-2 bg-gray-600 rounded-md text-sm hover:bg-gray-700 transition-colors"
