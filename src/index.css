@@ -2,9 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Memberikan latar belakang gradasi dan font default untuk aplikasi */
+/* Memberikan latar belakang dan font default untuk aplikasi */
 body {
-  background: linear-gradient(135deg, #3a4759 0%, #1c2532 100%);
+  background-color: #1F2937; /* Mengganti background gradient menjadi abu-abu gelap solid */
   font-family: 'Poppins', sans-serif;
   color: #E2E8F0; /* Warna teks default yang lebih terang */
 }
@@ -18,3 +18,4 @@ body {
     @apply rounded-2xl border border-white/20 shadow-lg; /* Menggunakan apply untuk tailwind class */
   }
 }
+

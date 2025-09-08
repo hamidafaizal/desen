@@ -1,14 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FiHome, FiList, FiPlus, FiEdit, FiCheckSquare } from 'react-icons/fi';
+// Mengganti ikon dari Feather Icons (fi) ke Font Awesome (fa) untuk mengatasi masalah resolusi modul
+import { FaHome, FaList, FaPlus, FaEdit, FaCheckSquare } from 'react-icons/fa';
 
 // Komponen Menu Bawah
 function BottomMenu() {
   const location = useLocation();
+  // Log untuk debugging saat komponen di-render
   console.log("BottomMenu rendered, current path:", location.pathname);
 
   // Fungsi untuk mendapatkan kelas link
   const getLinkClass = (path) => {
-    return `flex flex-col items-center w-full transition-colors ${
+    // Menyesuaikan kelas untuk menengahkan ikon karena teks dihapus
+    return `flex justify-center items-center w-full py-2 transition-colors ${
       location.pathname === path ? 'text-purple-400' : 'text-gray-400 hover:text-white'
     }`;
   };
@@ -18,31 +21,27 @@ function BottomMenu() {
       <div className="glassmorphism flex justify-around items-center p-2 mx-auto max-w-screen-lg">
         {/* Menu Dashboard */}
         <Link to="/" className={getLinkClass('/')}>
-          <FiHome className="w-6 h-6" />
-          <span className="text-xs">Dashboard</span>
+          <FaHome className="w-6 h-6" />
         </Link>
 
         {/* Menu Desain Baru */}
         <Link to="/desain-baru" className={getLinkClass('/desain-baru')}>
-          <FiList className="w-6 h-6" />
-          <span className="text-xs">Desain Baru</span>
+          <FaList className="w-6 h-6" />
         </Link>
 
         {/* Tombol Tambah Desain */}
         <Link to="/tambah-desain" className="p-4 bg-purple-600 rounded-full -mt-10 shadow-lg hover:bg-purple-700 transition-colors">
-          <FiPlus className="w-7 h-7 text-white" />
+          <FaPlus className="w-7 h-7 text-white" />
         </Link>
 
         {/* Menu Desain Revisi */}
         <Link to="/desain-revisi" className={getLinkClass('/desain-revisi')}>
-          <FiEdit className="w-6 h-6" />
-          <span className="text-xs">Desain Revisi</span>
+          <FaEdit className="w-6 h-6" />
         </Link>
 
         {/* Menu Desain Selesai */}
         <Link to="/desain-selesai" className={getLinkClass('/desain-selesai')}>
-          <FiCheckSquare className="w-6 h-6" />
-          <span className="text-xs">Desain Selesai</span>
+          <FaCheckSquare className="w-6 h-6" />
         </Link>
       </div>
     </footer>
