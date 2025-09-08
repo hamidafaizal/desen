@@ -1,254 +1,255 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '/src/supabaseClient.js';
-import { useSearch } from '/src/context/SearchContext.jsx';
-import { FiEdit, FiCheck, FiLoader, FiChevronLeft, FiChevronRight, FiDownload } from 'react-icons/fi';
-import EditDesainModal from '/src/modals/EditDesainModal.jsx';
-
-// Fungsi untuk membuat huruf pertama setiap kata menjadi kapital
-const capitalizeWords = (str) => {
-    if (!str) return '';
-    return str
-        .toLowerCase()
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-};
+import { supabase } from '../supabaseClient.js';
+import { useSearch } from '../context/SearchContext.jsx';
+import { FiEdit, FiCheck, FiLoader, FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import EditDesainModal from '../modals/EditDesainModal.jsx';
 
 // Komponen untuk badge status, dengan warna yang berbeda
 const StatusBadge = ({ status }) => {
   const statusColor = {
+    'dalam antrian': 'bg-yellow-500/20 text-yellow-300',
+    'proses': 'bg-blue-500/20 text-blue-300',
     'revisi': 'bg-orange-500/20 text-orange-300',
+    'selesai': 'bg-green-500/20 text-green-300',
   };
   return (
-    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusColor[status] || 'bg-gray-500/20 text-gray-300'}`}>
+    <span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${statusColor[status] || 'bg-gray-500/20 text-gray-300'}`}>
       {status}
     </span>
   );
 };
 
-// Komponen Image Slider
-const ImageSlider = ({ files, clientName }) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
+// Komponen Slider Gambar
+const ImageSlider = ({ images }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-    const prevSlide = () => {
-        const isFirstSlide = currentIndex === 0;
-        const newIndex = isFirstSlide ? files.length - 1 : currentIndex - 1;
-        setCurrentIndex(newIndex);
-    };
+  const goToPrevious = () => {
+    const isFirstSlide = currentIndex === 0;
+    const newIndex = isFirstSlide ? images.length - 1 : currentIndex - 1;
+    setCurrentIndex(newIndex);
+  };
 
-    const nextSlide = () => {
-        const isLastSlide = currentIndex === files.length - 1;
-        const newIndex = isLastSlide ? 0 : currentIndex + 1;
-        setCurrentIndex(newIndex);
-    };
+  const goToNext = () => {
+    const isLastSlide = currentIndex === images.length - 1;
+    const newIndex = isLastSlide ? 0 : currentIndex + 1;
+    setCurrentIndex(newIndex);
+  };
 
-    if (!files || files.length === 0) {
-        return (
-            <div className="aspect-square w-full bg-zinc-800">
-                <img 
-                    src={'https://placehold.co/600x600/18181b/FFF?text=No+Image'} 
-                    alt={`Desain untuk ${clientName}`} 
-                    className="w-full h-full object-cover" 
-                />
-            </div>
-        );
-    }
-    
+  if (!images || images.length === 0) {
     return (
-        <div className="aspect-square w-full relative group">
-            <div 
-                style={{ backgroundImage: `url(${files[currentIndex]})`}}
-                className="w-full h-full bg-center bg-cover duration-500"
-            ></div>
-            {files.length > 1 && (
-                <>
-                    <div onClick={prevSlide} className='hidden group-hover:block absolute top-1/2 -translate-y-1/2 left-5 text-2xl rounded-full p-2 bg-black/20 text-white cursor-pointer'>
-                        <FiChevronLeft size={30} />
-                    </div>
-                    <div onClick={nextSlide} className='hidden group-hover:block absolute top-1/2 -translate-y-1/2 right-5 text-2xl rounded-full p-2 bg-black/20 text-white cursor-pointer'>
-                        <FiChevronRight size={30} />
-                    </div>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
-                        {files.map((_, index) => (
-                            <div
-                                key={index}
-                                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentIndex === index ? 'bg-white' : 'bg-white/50'}`}
-                            ></div>
-                        ))}
-                    </div>
-                </>
-            )}
-        </div>
+      <div className="aspect-square w-full bg-zinc-800 rounded-lg flex items-center justify-center">
+        <span className="text-zinc-500">No Image</span>
+      </div>
     );
+  }
+
+  return (
+    <div className="relative aspect-square w-full group">
+      <div
+        style={{ backgroundImage: `url(${images[currentIndex]})` }}
+        className="w-full h-full rounded-lg bg-center bg-cover duration-500"
+      ></div>
+      {images.length > 1 && (
+        <>
+          <div onClick={goToPrevious} className="absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+            <FiChevronLeft size={20} />
+          </div>
+          <div onClick={goToNext} className="absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+            <FiChevronRight size={20} />
+          </div>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
+            {images.map((_, slideIndex) => (
+              <div
+                key={slideIndex}
+                className={`h-2 w-2 rounded-full transition-colors ${currentIndex === slideIndex ? 'bg-white' : 'bg-white/50'}`}
+              ></div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
-// Komponen Halaman Desain Revisi
+
 function DesainRevisi() {
-  const [data, setData] = useState([]);
-  const { searchQuery } = useSearch();
-  const [filteredData, setFilteredData] = useState([]);
+  const [desains, setDesains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingDesain, setEditingDesain] = useState(null);
+  const { searchQuery } = useSearch();
 
-  // Fungsi untuk mengambil data dari Supabase
   const getDesains = async () => {
+    console.log("Fetching revision designs from Supabase...");
     setLoading(true);
     setError(null);
-    console.log("Fetching revision designs from Supabase...");
-
     try {
-      const { data: desainsData, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from('desains')
         .select('*')
         .eq('status', 'revisi')
         .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      console.log("Fetched revision designs:", desainsData);
-      setData(desainsData);
-      setFilteredData(desainsData);
-    } catch (err) {
-      console.error("Error fetching designs:", err.message);
-      setError("Gagal memuat data desain revisi.");
+      if (error) throw error;
+      console.log("Fetched revision designs:", data);
+      setDesains(data);
+    } catch (error) {
+      console.error("Error fetching designs:", error.message);
+      setError("Gagal memuat data desain. Coba lagi nanti.");
     } finally {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     getDesains();
   }, []);
 
-  // Efek untuk filtering data berdasarkan search query
-  useEffect(() => {
-    if(data) {
-        const result = data.filter(item =>
-        item.nama_client.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setFilteredData(result);
-    }
-  }, [searchQuery, data]);
-
-  // Fungsi untuk menyetujui revisi
   const handleSetujui = async (id) => {
-    console.log(`Approving design with id: ${id}`);
-    if (window.confirm('Apakah Anda yakin ingin menyetujui desain ini? Status akan diubah menjadi "selesai".')) {
-        const { error } = await supabase
+    if (window.confirm('Apakah Anda yakin ingin menyetujui desain ini? Statusnya akan berubah menjadi "selesai".')) {
+      const { error } = await supabase
         .from('desains')
         .update({ status: 'selesai' })
         .eq('id', id);
 
-        if (error) {
-            console.error("Error updating status:", error.message);
-            setError('Gagal menyetujui desain.');
-        } else {
-            console.log("Design approved successfully.");
-            setData(currentDesains => currentDesains.filter(d => d.id !== id));
-            setFilteredData(currentFiltered => currentFiltered.filter(d => d.id !== id));
-        }
+      if (error) {
+        console.error("Error updating status:", error.message);
+        setError('Gagal menyetujui desain.');
+      } else {
+        console.log("Design approved successfully.");
+        setDesains(currentDesains => currentDesains.filter(d => d.id !== id));
+      }
     }
   };
 
-  // Handler untuk membuka modal
   const handleEditClick = (desain) => {
-    console.log("Opening edit modal for:", desain);
     setEditingDesain(desain);
     setIsEditModalOpen(true);
   };
-  
-  // Handler untuk menutup modal
+
   const handleCloseModal = () => {
     setIsEditModalOpen(false);
     setEditingDesain(null);
   };
-  
-  // Handler untuk memperbarui UI setelah edit berhasil
+
   const handleUpdateSuccess = (updatedDesain) => {
-    console.log("Updating UI with new data:", updatedDesain);
-    setData(prevData => prevData.map(d => d.id === updatedDesain.id ? updatedDesain : d));
-    setFilteredData(prevFilteredData => prevFilteredData.map(d => d.id === updatedDesain.id ? updatedDesain : d));
+    setDesains(desains.map(d => d.id === updatedDesain.id ? updatedDesain : d));
+  };
+  
+  // Fungsi untuk menangani unduhan dan menandai sebagai sudah dilihat
+  const handleDownloadAndMarkAsRead = async (desain) => {
+    console.log(`Downloading and marking as read for ID: ${desain.id}`);
+
+    // Trigger unduhan untuk semua file di hasil_desain
+    if (desain.hasil_desain && desain.hasil_desain.length > 0) {
+        desain.hasil_desain.forEach((fileUrl, index) => {
+            // Membuat elemen anchor sementara untuk trigger download
+            const link = document.createElement('a');
+            link.href = fileUrl;
+            link.setAttribute('download', `desain_${desain.nama_client}_${index + 1}`); // Nama file saat diunduh
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
+
+    // Jika ada notifikasi pembaruan, tandai sebagai sudah dilihat
+    if (desain.desain_diupdate === false) {
+        const { error } = await supabase
+            .from('desains')
+            .update({ desain_diupdate: true })
+            .eq('id', desain.id);
+
+        if (error) {
+            console.error("Error updating desain_diupdate:", error.message);
+        } else {
+            console.log("Successfully marked as read.");
+            // Perbarui state lokal agar titik hijau langsung hilang
+            setDesains(currentDesains =>
+                currentDesains.map(d =>
+                    d.id === desain.id ? { ...d, desain_diupdate: true } : d
+                )
+            );
+        }
+    }
   };
 
-  // Fungsi untuk memformat tanggal
+  const capitalizeWords = (str) => {
+    if (!str) return '';
+    return str.replace(/\b\w/g, char => char.toUpperCase());
+  };
+
   const formatDate = (dateString) => {
-    if (!dateString) return '';
+    if (!dateString) return 'Tanggal tidak valid';
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(dateString).toLocaleDateString('id-ID', options);
   };
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center pt-20">
-        <FiLoader className="animate-spin h-8 w-8 text-white" />
-        <p className="ml-3 text-gray-300">Memuat data...</p>
-      </div>
-    );
-  }
 
-  if (error) {
-    return <p className="text-center text-red-400 pt-10">{error}</p>;
-  }
-
+  const filteredDesains = desains.filter(desain =>
+    desain.nama_client.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <>
-      <div className="space-y-4">
-        {filteredData.length === 0 ? (
-          <p className="text-center text-gray-400 pt-10">
-            {searchQuery ? 'Tidak ada desain revisi yang cocok.' : 'Tidak ada desain yang perlu direvisi.'}
-          </p>
-        ) : (
-          filteredData.map((item) => (
-            <div key={item.id} className="glassmorphism rounded-xl overflow-hidden w-full max-w-lg mx-auto">
-              {/* Card Header */}
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-bold text-white">{capitalizeWords(item.nama_client)}</p>
-                  <p className="text-xs text-gray-400">{formatDate(item.tanggal_briefing)}</p>
-                </div>
-                <StatusBadge status={item.status} />
+      <div className="max-w-xl mx-auto space-y-4">
+        {loading && (
+          <div className="flex justify-center items-center py-10">
+            <FiLoader className="animate-spin h-8 w-8 text-purple-500" />
+            <p className="ml-3 text-gray-300">Memuat data...</p>
+          </div>
+        )}
+        {error && <p className="text-red-400 bg-red-500/20 p-3 rounded-lg text-center">{error}</p>}
+        
+        {!loading && !error && filteredDesains.length === 0 && (
+          <p className="text-center text-gray-400 py-8">Tidak ada desain revisi yang ditemukan.</p>
+        )}
+
+        {!loading && !error && filteredDesains.map(desain => (
+          <div key={desain.id} className="glassmorphism rounded-xl overflow-hidden">
+            {/* Card Header */}
+            <div className="flex items-center justify-between p-3">
+              <div>
+                <p className="font-bold text-white">{capitalizeWords(desain.nama_client)}</p>
+                <p className="text-xs text-gray-400">{formatDate(desain.created_at)}</p>
               </div>
-
-              {/* Card Image Slider */}
-              <ImageSlider files={item.hasil_desain} clientName={item.nama_client} />
-
-              {/* Card Footer */}
-              <div className="p-4">
-                <div className="flex items-center space-x-4 mb-3">
-                   <button onClick={() => handleEditClick(item)} className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
-                    <FiEdit />
-                    <span>Edit Brief</span>
-                  </button>
-                  <button onClick={() => handleSetujui(item.id)} className="flex items-center space-x-2 text-gray-400 hover:text-green-500 transition-colors">
-                    <FiCheck />
-                    <span>Setujui</span>
-                  </button>
-                  <a 
-                    href={item.hasil_desain && item.hasil_desain.length > 0 ? item.hasil_desain[0] : '#'} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    download
-                    className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <FiDownload />
-                    <span>Unduh</span>
-                  </a>
-                </div>
-                <p className="text-sm text-gray-300">
-                  {item.briefing}
-                </p>
+               <div className="flex items-center space-x-2">
+                <StatusBadge status={desain.status} />
+                {desain.desain_diupdate === false && (
+                    <span className="h-2.5 w-2.5 bg-green-400 rounded-full animate-pulse" title="Ada pembaruan desain"></span>
+                )}
               </div>
             </div>
-          ))
-        )}
+
+            {/* Image Content */}
+            <ImageSlider images={desain.hasil_desain} />
+            
+            {/* Card Footer */}
+            <div className="p-3">
+               <div className="flex justify-end items-center space-x-2 mb-2">
+                 <button onClick={() => handleEditClick(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-gray-600/50 rounded-md text-sm hover:bg-gray-700/70 transition-colors">
+                    <FiEdit />
+                    <span>Edit Brief</span>
+                </button>
+                 <button onClick={() => handleDownloadAndMarkAsRead(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600/50 rounded-md text-sm hover:bg-blue-700/70 transition-colors">
+                    <FiDownload />
+                    <span>Unduh</span>
+                </button>
+                 <button onClick={() => handleSetujui(desain.id)} className="flex items-center space-x-2 px-3 py-1.5 bg-green-600/50 rounded-md text-sm hover:bg-green-700/70 transition-colors">
+                    <FiCheck />
+                    <span>Setujui</span>
+                </button>
+              </div>
+
+              {desain.briefing && (
+                <p className="text-sm text-gray-300">
+                  <span className="font-semibold text-white">Briefing: </span>
+                  {desain.briefing}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
-      
       {isEditModalOpen && (
         <EditDesainModal
           desain={editingDesain}
