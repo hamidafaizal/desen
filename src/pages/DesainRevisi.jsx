@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { useSearch } from '../context/SearchContext.jsx';
 import { FiEdit, FiCheck, FiLoader, FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
@@ -20,16 +20,24 @@ const StatusBadge = ({ status }) => {
 };
 
 // Komponen Slider Gambar
-const ImageSlider = ({ images }) => {
+const ImageSlider = ({ images, onInteraction, hasUpdate }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  const handleInteraction = () => {
+    if (hasUpdate) {
+      onInteraction();
+    }
+  };
+
   const goToPrevious = () => {
+    handleInteraction();
     const isFirstSlide = currentIndex === 0;
     const newIndex = isFirstSlide ? images.length - 1 : currentIndex - 1;
     setCurrentIndex(newIndex);
   };
 
   const goToNext = () => {
+    handleInteraction();
     const isLastSlide = currentIndex === images.length - 1;
     const newIndex = isLastSlide ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
@@ -44,17 +52,17 @@ const ImageSlider = ({ images }) => {
   }
 
   return (
-    <div className="relative aspect-square w-full group">
+    <div className="relative aspect-square w-full group" onClick={handleInteraction}>
       <div
         style={{ backgroundImage: `url(${images[currentIndex]})` }}
         className="w-full h-full rounded-lg bg-center bg-cover duration-500"
       ></div>
       {images.length > 1 && (
         <>
-          <div onClick={goToPrevious} className="absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+          <div onClick={(e) => { e.stopPropagation(); goToPrevious(); }} className="absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
             <FiChevronLeft size={20} />
           </div>
-          <div onClick={goToNext} className="absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+          <div onClick={(e) => { e.stopPropagation(); goToNext(); }} className="absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
             <FiChevronRight size={20} />
           </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
@@ -66,6 +74,39 @@ const ImageSlider = ({ images }) => {
             ))}
           </div>
         </>
+      )}
+    </div>
+  );
+};
+
+
+// Komponen untuk menampilkan teks yang bisa diperluas
+const ExpandableText = ({ text }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const textRef = useRef(null);
+
+  useEffect(() => {
+    // Cek apakah teks melebihi 3 baris
+    if (textRef.current) {
+      // scrollHeight adalah tinggi total konten, clientHeight adalah tinggi yang terlihat
+      setIsOverflowing(textRef.current.scrollHeight > textRef.current.clientHeight);
+    }
+  }, [text]);
+
+  return (
+    <div>
+      <p
+        ref={textRef}
+        className={`text-sm text-gray-300 whitespace-pre-wrap ${!isExpanded ? 'line-clamp-3' : ''}`}
+      >
+        <span className="font-semibold text-white">Briefing: </span>
+        {text}
+      </p>
+      {isOverflowing && (
+        <button onClick={() => setIsExpanded(!isExpanded)} className="text-xs text-gray-400 hover:underline mt-1 cursor-pointer">
+          {isExpanded ? '...lebih sedikit' : 'lebih banyak...'}
+        </button>
       )}
     </div>
   );
@@ -104,6 +145,25 @@ function DesainRevisi() {
   useEffect(() => {
     getDesains();
   }, []);
+  
+  // Fungsi untuk menandai pembaruan desain telah dilihat
+  const handleMarkAsRead = async (desainId) => {
+    const { error } = await supabase
+      .from('desains')
+      .update({ desain_diupdate: true })
+      .eq('id', desainId);
+
+    if (error) {
+      console.error("Error updating desain_diupdate:", error.message);
+    } else {
+      console.log(`Design ${desainId} marked as read.`);
+      setDesains(currentDesains =>
+        currentDesains.map(d =>
+          d.id === desainId ? { ...d, desain_diupdate: true } : d
+        )
+      );
+    }
+  };
 
   const handleSetujui = async (id) => {
     if (window.confirm('Apakah Anda yakin ingin menyetujui desain ini? Statusnya akan berubah menjadi "selesai".')) {
@@ -136,41 +196,17 @@ function DesainRevisi() {
     setDesains(desains.map(d => d.id === updatedDesain.id ? updatedDesain : d));
   };
   
-  // Fungsi untuk menangani unduhan dan menandai sebagai sudah dilihat
-  const handleDownloadAndMarkAsRead = async (desain) => {
-    console.log(`Downloading and marking as read for ID: ${desain.id}`);
-
-    // Trigger unduhan untuk semua file di hasil_desain
+  const handleDownload = (desain) => {
+    console.log(`Downloading files for ID: ${desain.id}`);
     if (desain.hasil_desain && desain.hasil_desain.length > 0) {
         desain.hasil_desain.forEach((fileUrl, index) => {
-            // Membuat elemen anchor sementara untuk trigger download
             const link = document.createElement('a');
             link.href = fileUrl;
-            link.setAttribute('download', `desain_${desain.nama_client}_${index + 1}`); // Nama file saat diunduh
+            link.setAttribute('download', `desain_${desain.nama_client}_${index + 1}`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         });
-    }
-
-    // Jika ada notifikasi pembaruan, tandai sebagai sudah dilihat
-    if (desain.desain_diupdate === false) {
-        const { error } = await supabase
-            .from('desains')
-            .update({ desain_diupdate: true })
-            .eq('id', desain.id);
-
-        if (error) {
-            console.error("Error updating desain_diupdate:", error.message);
-        } else {
-            console.log("Successfully marked as read.");
-            // Perbarui state lokal agar titik hijau langsung hilang
-            setDesains(currentDesains =>
-                currentDesains.map(d =>
-                    d.id === desain.id ? { ...d, desain_diupdate: true } : d
-                )
-            );
-        }
     }
   };
 
@@ -221,7 +257,11 @@ function DesainRevisi() {
             </div>
 
             {/* Image Content */}
-            <ImageSlider images={desain.hasil_desain} />
+            <ImageSlider 
+              images={desain.hasil_desain} 
+              onInteraction={() => handleMarkAsRead(desain.id)}
+              hasUpdate={desain.desain_diupdate === false}
+            />
             
             {/* Card Footer */}
             <div className="p-3">
@@ -230,7 +270,7 @@ function DesainRevisi() {
                     <FiEdit />
                     <span>Edit Brief</span>
                 </button>
-                 <button onClick={() => handleDownloadAndMarkAsRead(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600/50 rounded-md text-sm hover:bg-blue-700/70 transition-colors">
+                 <button onClick={() => handleDownload(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600/50 rounded-md text-sm hover:bg-blue-700/70 transition-colors">
                     <FiDownload />
                     <span>Unduh</span>
                 </button>
@@ -240,12 +280,7 @@ function DesainRevisi() {
                 </button>
               </div>
 
-              {desain.briefing && (
-                <p className="text-sm text-gray-300">
-                  <span className="font-semibold text-white">Briefing: </span>
-                  {desain.briefing}
-                </p>
-              )}
+              {desain.briefing && <ExpandableText text={desain.briefing} />}
             </div>
           </div>
         ))}
