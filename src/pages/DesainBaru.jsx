@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import { FiSearch, FiEdit, FiTrash2, FiLoader } from 'react-icons/fi';
-import EditDesainModal from '../modals/EditDesainModal';
+import { supabase } from '../supabaseClient.js';
+import { useSearch } from '../context/SearchContext.jsx';
+import { FaEdit, FaTrash, FaSpinner, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import EditDesainModal from '../modals/EditDesainModal.jsx';
 
 // Komponen untuk badge status, dengan warna yang berbeda
 const StatusBadge = ({ status }) => {
   const statusColor = {
     'dalam antrian': 'bg-yellow-500/20 text-yellow-300',
     'proses': 'bg-blue-500/20 text-blue-300',
-    'revisi': 'bg-orange-500/20 text-orange-300',
-    'selesai': 'bg-green-500/20 text-green-300',
   };
   return (
     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusColor[status] || 'bg-gray-500/20 text-gray-300'}`}>
@@ -18,9 +17,77 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Komponen Image Slider
+const ImageSlider = ({ files, clientName }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    const prevSlide = () => {
+        const isFirstSlide = currentIndex === 0;
+        const newIndex = isFirstSlide ? files.length - 1 : currentIndex - 1;
+        setCurrentIndex(newIndex);
+    };
+
+    const nextSlide = () => {
+        const isLastSlide = currentIndex === files.length - 1;
+        const newIndex = isLastSlide ? 0 : currentIndex + 1;
+        setCurrentIndex(newIndex);
+    };
+
+    if (!files || files.length === 0) {
+        return (
+            <div className="aspect-square w-full bg-zinc-800">
+                <img 
+                    src={'https://placehold.co/600x600/18181b/FFF?text=No+Image'} 
+                    alt={`Desain untuk ${clientName}`} 
+                    className="w-full h-full object-cover" 
+                />
+            </div>
+        );
+    }
+    
+    return (
+        <div className="aspect-square w-full relative group">
+            <div 
+                style={{ backgroundImage: `url(${files[currentIndex]})`}}
+                className="w-full h-full bg-center bg-cover duration-500"
+            ></div>
+            {files.length > 1 && (
+                <>
+                    <div onClick={prevSlide} className='hidden group-hover:block absolute top-1/2 -translate-y-1/2 left-5 text-2xl rounded-full p-2 bg-black/20 text-white cursor-pointer'>
+                        <FaChevronLeft size={30} />
+                    </div>
+                    <div onClick={nextSlide} className='hidden group-hover:block absolute top-1/2 -translate-y-1/2 right-5 text-2xl rounded-full p-2 bg-black/20 text-white cursor-pointer'>
+                        <FaChevronRight size={30} />
+                    </div>
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
+                        {files.map((_, index) => (
+                            <div
+                                key={index}
+                                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentIndex === index ? 'bg-white' : 'bg-white/50'}`}
+                            ></div>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+
+// Fungsi untuk membuat huruf pertama setiap kata menjadi kapital
+const capitalizeWords = (str) => {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+};
+
 // Komponen Halaman Desain Baru
 function DesainBaru() {
-  const [desains, setDesains] = useState([]);
+  const [data, setData] = useState([]);
+  const { searchQuery } = useSearch();
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -29,139 +96,154 @@ function DesainBaru() {
 
   // Fungsi untuk mengambil data dari Supabase
   const getDesains = async () => {
-    console.log("Fetching new designs from Supabase...");
     setLoading(true);
     setError(null);
+    console.log("Fetching new designs from Supabase...");
+
     try {
-      const { data, error } = await supabase
+      const { data: desainsData, error: fetchError } = await supabase
         .from('desains')
         .select('*')
         .in('status', ['dalam antrian', 'proses'])
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      console.log("Fetched designs:", data);
-      setDesains(data);
-    } catch (error) {
-      console.error("Error fetching designs:", error.message);
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      console.log("Fetched designs:", desainsData);
+      setData(desainsData);
+      setFilteredData(desainsData);
+    } catch (err) {
+      console.error("Error fetching designs:", err.message);
       setError("Gagal memuat data desain. Coba lagi nanti.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Mengambil data saat komponen dimuat
   useEffect(() => {
     getDesains();
   }, []);
-
-  // Fungsi untuk menangani penghapusan data
-  const handleDelete = async (id) => {
-    console.log(`Attempting to delete design with id: ${id}`);
-    if (window.confirm('Apakah Anda yakin ingin menghapus desain ini?')) {
-      try {
-        // Logika untuk menghapus file dari storage bisa ditambahkan di sini jika perlu
-        const { error } = await supabase.from('desains').delete().match({ id });
-        if (error) throw error;
-        console.log("Delete successful.");
-        setDesains(desains.filter((d) => d.id !== id));
-      } catch (error) {
-        console.error('Error deleting design:', error.message);
-        alert('Gagal menghapus desain.');
+  
+  useEffect(() => {
+    if (data) {
+        const result = data.filter(item =>
+        item.nama_client.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredData(result);
+    }
+  }, [searchQuery, data]);
+  
+  const handleDelete = async (desainToDelete) => {
+    console.log(`Attempting to delete design with id: ${desainToDelete.id}`);
+    try {
+      if (desainToDelete.files && desainToDelete.files.length > 0) {
+        const filePaths = desainToDelete.files.map(fileUrl => {
+          const url = new URL(fileUrl);
+          return url.pathname.split('/desain-files/')[1];
+        });
+        console.log("Deleting files from storage:", filePaths);
+        const { error: storageError } = await supabase.storage.from('desain-files').remove(filePaths);
+        if (storageError) {
+          console.error("Error deleting files from storage:", storageError.message);
+        }
       }
+      
+      const { error: dbError } = await supabase.from('desains').delete().match({ id: desainToDelete.id });
+      if (dbError) throw dbError;
+
+      console.log("Delete successful from database.");
+      setData(prevData => prevData.filter((d) => d.id !== desainToDelete.id));
+      setFilteredData(prevData => prevData.filter((d) => d.id !== desainToDelete.id));
+
+    } catch (error) {
+      console.error('Error deleting design:', error.message);
+      setError('Gagal menghapus desain.');
     }
   };
 
-  // Membuka modal edit
   const handleEditClick = (desain) => {
     console.log("Opening edit modal for:", desain);
     setEditingDesain(desain);
     setIsEditModalOpen(true);
   };
   
-  // Menutup modal edit
   const handleCloseModal = () => {
     setIsEditModalOpen(false);
     setEditingDesain(null);
   };
   
-  // Memperbarui UI setelah data berhasil diupdate di modal
   const handleUpdateSuccess = (updatedDesain) => {
     console.log("Updating UI with new data:", updatedDesain);
-    setDesains(desains.map(d => d.id === updatedDesain.id ? updatedDesain : d));
+    setData(prevData => prevData.map(d => d.id === updatedDesain.id ? updatedDesain : d));
+    setFilteredData(prevFilteredData => prevFilteredData.map(d => d.id === updatedDesain.id ? updatedDesain : d));
   };
 
-
-  // Fungsi untuk memformat tanggal
   const formatDate = (dateString) => {
+    if (!dateString) return '';
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(dateString).toLocaleDateString('id-ID', options);
   };
-  
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center pt-20">
+        <FaSpinner className="animate-spin h-8 w-8 text-white" />
+        <p className="ml-3 text-gray-300">Memuat data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-center text-red-400 pt-10">{error}</p>;
+  }
+
   return (
     <>
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-white">Desain Baru</h1>
+      <div className="space-y-4">
+        {filteredData.length === 0 ? (
+          <p className="text-center text-gray-400 pt-10">
+            {searchQuery ? 'Tidak ada desain yang cocok dengan pencarian.' : 'Tidak ada desain baru yang ditemukan.'}
+          </p>
+        ) : (
+          filteredData.map((item) => (
+            <div key={item.id} className="glassmorphism rounded-xl overflow-hidden w-full max-w-lg mx-auto">
+              {/* Card Header */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center space-x-3">
+                  <div>
+                    <p className="font-bold text-white">{capitalizeWords(item.nama_client)}</p>
+                    <p className="text-xs text-gray-400">{formatDate(item.tanggal_briefing)}</p>
+                  </div>
+                </div>
+                <StatusBadge status={item.status} />
+              </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cari berdasarkan nama client..."
-            className="w-full p-3 pl-10 bg-gray-800/60 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-        </div>
+              {/* Card Image Slider */}
+              <ImageSlider files={item.files} clientName={capitalizeWords(item.nama_client)} />
 
-        {/* Tampilan Loading dan Error */}
-        {loading && (
-            <div className="flex justify-center items-center py-10">
-            <FiLoader className="animate-spin h-8 w-8 text-purple-500" />
-            <p className="ml-3 text-gray-300">Memuat data...</p>
+              {/* Card Footer */}
+              <div className="p-4">
+                <div className="flex items-center space-x-4 mb-3">
+                  <button onClick={() => handleEditClick(item)} className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
+                    <FaEdit />
+                    <span>Edit</span>
+                  </button>
+                  <button onClick={() => handleDelete(item)} className="flex items-center space-x-2 text-gray-400 hover:text-red-500 transition-colors">
+                    <FaTrash />
+                    <span>Hapus</span>
+                  </button>
+                </div>
+                <p className="text-sm text-gray-300">
+                  {item.briefing}
+                </p>
+              </div>
             </div>
-        )}
-        {error && <p className="text-red-400 bg-red-500/20 p-3 rounded-lg text-center">{error}</p>}
-        
-        {/* Konten Utama */}
-        {!loading && !error && (
-          <div className="overflow-x-auto glassmorphism p-4 rounded-xl">
-            {desains.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">Tidak ada desain baru yang ditemukan.</p>
-            ) : (
-              <table className="w-full text-left">
-                {/* ... table head ... */}
-                 <thead>
-                    <tr className="border-b border-gray-700 text-sm text-gray-400">
-                    <th className="p-4 font-semibold">No</th>
-                    <th className="p-4 font-semibold">Client</th>
-                    <th className="p-4 font-semibold">Status</th>
-                    <th className="p-4 font-semibold">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                  {desains.map((desain, index) => (
-                    <tr key={desain.id} className="border-b border-gray-700 last:border-b-0 hover:bg-gray-800/50">
-                      <td className="p-4">{index + 1}</td>
-                      <td className="p-4">
-                        <div className="font-semibold">{desain.nama_client}</div>
-                        <div className="text-xs text-gray-400">{formatDate(desain.tanggal_briefing)}</div>
-                      </td>
-                      <td className="p-4"><StatusBadge status={desain.status} /></td>
-                      <td className="p-4">
-                        <div className="flex space-x-2">
-                          <button onClick={() => handleEditClick(desain)} className="text-blue-400 hover:text-blue-300"><FiEdit size={18} /></button>
-                          <button onClick={() => handleDelete(desain.id)} className="text-red-400 hover:text-red-300"><FiTrash2 size={18} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          ))
         )}
       </div>
-
-      {/* Render Modal */}
+      
       {isEditModalOpen && (
         <EditDesainModal
           desain={editingDesain}

@@ -2,12 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Memberikan latar belakang dan font default untuk aplikasi */
-body {
-  background-color: #1F2937; /* Mengganti background gradient menjadi abu-abu gelap solid */
+/* Memberikan latar belakang solid dan font default untuk aplikasi */
+html, body {
+  background-color: #18181b; /* Warna abu-abu tua solid */
   font-family: 'Poppins', sans-serif;
   color: #E2E8F0; /* Warna teks default yang lebih terang */
 }
+
+/* Menyembunyikan scrollbar di semua browser */
+body {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+body::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
 
 /* Kelas utility untuk efek glassmorphism */
 @layer components {

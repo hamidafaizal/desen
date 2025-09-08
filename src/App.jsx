@@ -1,14 +1,14 @@
 import { Routes, Route } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import Header from './components/Header';
-import BottomMenu from './components/BottomMenu';
-import TambahDesain from './pages/TambahDesain';
-import DesainBaru from './pages/DesainBaru';
-import DesainRevisi from './pages/DesainRevisi';
-import DesainSelesai from './pages/DesainSelesai';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ProtectedRoute from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext.jsx';
+import Header from './components/Header.jsx';
+import BottomMenu from './components/BottomMenu.jsx';
+import TambahDesain from './pages/TambahDesain.jsx';
+import DesainBaru from './pages/DesainBaru.jsx';
+import DesainRevisi from './pages/DesainRevisi.jsx';
+import DesainSelesai from './pages/DesainSelesai.jsx';
+import Login from './pages/Login.jsx';
+import Register from './pages/Register.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 // Komponen Dashboard sementara
 function Dashboard() {
@@ -36,9 +36,10 @@ function App() {
   return (
     <div className="text-gray-200">
       <Header />
-      <main className="pt-20 pb-24 px-4">
+      {/* // Sesuaikan padding atas untuk memberi ruang bagi header yang lebih ringkas */}
+      <main className="pt-24 pb-24 px-4">
         <Routes>
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><DesainBaru /></ProtectedRoute>} />
           <Route path="/tambah-desain" element={<ProtectedRoute><TambahDesain /></ProtectedRoute>} />
           <Route path="/desain-baru" element={<ProtectedRoute><DesainBaru /></ProtectedRoute>} />
           <Route path="/desain-revisi" element={<ProtectedRoute><DesainRevisi /></ProtectedRoute>} />
