@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient.js';
-import { useSearch } from '../context/SearchContext.jsx';
-import { FiEdit, FiCheck, FiLoader, FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import EditDesainModal from '../modals/EditDesainModal.jsx';
+import { supabase } from '/src/supabaseClient.js';
+import { useSearch } from '/src/context/SearchContext.jsx';
+import { FaEdit, FaCheck, FaSpinner, FaDownload, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import EditDesainModal from '/src/modals/EditDesainModal.jsx';
 
 // Komponen untuk badge status, dengan warna yang berbeda
 const StatusBadge = ({ status }) => {
@@ -20,24 +20,16 @@ const StatusBadge = ({ status }) => {
 };
 
 // Komponen Slider Gambar
-const ImageSlider = ({ images, onInteraction, hasUpdate }) => {
+const ImageSlider = ({ images }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const handleInteraction = () => {
-    if (hasUpdate) {
-      onInteraction();
-    }
-  };
-
   const goToPrevious = () => {
-    handleInteraction();
     const isFirstSlide = currentIndex === 0;
     const newIndex = isFirstSlide ? images.length - 1 : currentIndex - 1;
     setCurrentIndex(newIndex);
   };
 
   const goToNext = () => {
-    handleInteraction();
     const isLastSlide = currentIndex === images.length - 1;
     const newIndex = isLastSlide ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
@@ -52,18 +44,18 @@ const ImageSlider = ({ images, onInteraction, hasUpdate }) => {
   }
 
   return (
-    <div className="relative aspect-square w-full group" onClick={handleInteraction}>
+    <div className="relative aspect-square w-full group">
       <div
         style={{ backgroundImage: `url(${images[currentIndex]})` }}
         className="w-full h-full rounded-lg bg-center bg-cover duration-500"
       ></div>
       {images.length > 1 && (
         <>
-          <div onClick={(e) => { e.stopPropagation(); goToPrevious(); }} className="absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
-            <FiChevronLeft size={20} />
+          <div onClick={goToPrevious} className="absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+            <FaChevronLeft size={20} />
           </div>
-          <div onClick={(e) => { e.stopPropagation(); goToNext(); }} className="absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
-            <FiChevronRight size={20} />
+          <div onClick={goToNext} className="absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+            <FaChevronRight size={20} />
           </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
             {images.map((_, slideIndex) => (
@@ -79,7 +71,6 @@ const ImageSlider = ({ images, onInteraction, hasUpdate }) => {
   );
 };
 
-
 // Komponen untuk menampilkan teks yang bisa diperluas
 const ExpandableText = ({ text }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -87,9 +78,7 @@ const ExpandableText = ({ text }) => {
   const textRef = useRef(null);
 
   useEffect(() => {
-    // Cek apakah teks melebihi 3 baris
     if (textRef.current) {
-      // scrollHeight adalah tinggi total konten, clientHeight adalah tinggi yang terlihat
       setIsOverflowing(textRef.current.scrollHeight > textRef.current.clientHeight);
     }
   }, [text]);
@@ -145,25 +134,6 @@ function DesainRevisi() {
   useEffect(() => {
     getDesains();
   }, []);
-  
-  // Fungsi untuk menandai pembaruan desain telah dilihat
-  const handleMarkAsRead = async (desainId) => {
-    const { error } = await supabase
-      .from('desains')
-      .update({ desain_diupdate: true })
-      .eq('id', desainId);
-
-    if (error) {
-      console.error("Error updating desain_diupdate:", error.message);
-    } else {
-      console.log(`Design ${desainId} marked as read.`);
-      setDesains(currentDesains =>
-        currentDesains.map(d =>
-          d.id === desainId ? { ...d, desain_diupdate: true } : d
-        )
-      );
-    }
-  };
 
   const handleSetujui = async (id) => {
     if (window.confirm('Apakah Anda yakin ingin menyetujui desain ini? Statusnya akan berubah menjadi "selesai".')) {
@@ -196,8 +166,9 @@ function DesainRevisi() {
     setDesains(desains.map(d => d.id === updatedDesain.id ? updatedDesain : d));
   };
   
-  const handleDownload = (desain) => {
-    console.log(`Downloading files for ID: ${desain.id}`);
+  const handleDownloadAndMarkAsRead = async (desain) => {
+    console.log(`Downloading and marking as read for ID: ${desain.id}`);
+
     if (desain.hasil_desain && desain.hasil_desain.length > 0) {
         desain.hasil_desain.forEach((fileUrl, index) => {
             const link = document.createElement('a');
@@ -207,6 +178,24 @@ function DesainRevisi() {
             link.click();
             document.body.removeChild(link);
         });
+    }
+
+    if (desain.desain_diupdate === false) {
+        const { error } = await supabase
+            .from('desains')
+            .update({ desain_diupdate: true })
+            .eq('id', desain.id);
+
+        if (error) {
+            console.error("Error updating desain_diupdate:", error.message);
+        } else {
+            console.log("Successfully marked as read.");
+            setDesains(currentDesains =>
+                currentDesains.map(d =>
+                    d.id === desain.id ? { ...d, desain_diupdate: true } : d
+                )
+            );
+        }
     }
   };
 
@@ -230,7 +219,7 @@ function DesainRevisi() {
       <div className="max-w-xl mx-auto space-y-4">
         {loading && (
           <div className="flex justify-center items-center py-10">
-            <FiLoader className="animate-spin h-8 w-8 text-purple-500" />
+            <FaSpinner className="animate-spin h-8 w-8 text-purple-500" />
             <p className="ml-3 text-gray-300">Memuat data...</p>
           </div>
         )}
@@ -242,7 +231,6 @@ function DesainRevisi() {
 
         {!loading && !error && filteredDesains.map(desain => (
           <div key={desain.id} className="glassmorphism rounded-xl overflow-hidden">
-            {/* Card Header */}
             <div className="flex items-center justify-between p-3">
               <div>
                 <p className="font-bold text-white">{capitalizeWords(desain.nama_client)}</p>
@@ -256,26 +244,20 @@ function DesainRevisi() {
               </div>
             </div>
 
-            {/* Image Content */}
-            <ImageSlider 
-              images={desain.hasil_desain} 
-              onInteraction={() => handleMarkAsRead(desain.id)}
-              hasUpdate={desain.desain_diupdate === false}
-            />
+            <ImageSlider images={desain.hasil_desain} />
             
-            {/* Card Footer */}
             <div className="p-3">
                <div className="flex justify-end items-center space-x-2 mb-2">
                  <button onClick={() => handleEditClick(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-gray-600/50 rounded-md text-sm hover:bg-gray-700/70 transition-colors">
-                    <FiEdit />
+                    <FaEdit />
                     <span>Edit Brief</span>
                 </button>
-                 <button onClick={() => handleDownload(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600/50 rounded-md text-sm hover:bg-blue-700/70 transition-colors">
-                    <FiDownload />
+                 <button onClick={() => handleDownloadAndMarkAsRead(desain)} className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600/50 rounded-md text-sm hover:bg-blue-700/70 transition-colors">
+                    <FaDownload />
                     <span>Unduh</span>
                 </button>
                  <button onClick={() => handleSetujui(desain.id)} className="flex items-center space-x-2 px-3 py-1.5 bg-green-600/50 rounded-md text-sm hover:bg-green-700/70 transition-colors">
-                    <FiCheck />
+                    <FaCheck />
                     <span>Setujui</span>
                 </button>
               </div>
