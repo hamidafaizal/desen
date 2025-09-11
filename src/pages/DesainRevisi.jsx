@@ -19,10 +19,8 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Komponen Slider Gambar
-const ImageSlider = ({ images }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
+// Komponen Slider Gambar yang sekarang dikontrol oleh parent
+const ImageSlider = ({ images, currentIndex, setCurrentIndex }) => {
   const goToPrevious = () => {
     const isFirstSlide = currentIndex === 0;
     const newIndex = isFirstSlide ? images.length - 1 : currentIndex - 1;
@@ -110,6 +108,9 @@ function DesainRevisi() {
   const [editingDesain, setEditingDesain] = useState(null);
   const { searchQuery } = useSearch();
 
+  // State untuk melacak indeks gambar yang sedang aktif di setiap desain
+  const [activeImageIndexes, setActiveImageIndexes] = useState({});
+
   const getDesains = async () => {
     console.log("Fetching revision designs from Supabase...");
     setLoading(true);
@@ -121,8 +122,16 @@ function DesainRevisi() {
         .eq('status', 'revisi')
         .order('created_at', { ascending: false });
       if (error) throw error;
+      
       console.log("Fetched revision designs:", data);
       setDesains(data);
+      // Inisialisasi indeks gambar aktif untuk setiap desain
+      const initialIndexes = {};
+      data.forEach(desain => {
+        initialIndexes[desain.id] = 0;
+      });
+      setActiveImageIndexes(initialIndexes);
+
     } catch (error) {
       console.error("Error fetching designs:", error.message);
       setError("Gagal memuat data desain. Coba lagi nanti.");
@@ -166,36 +175,44 @@ function DesainRevisi() {
     setDesains(desains.map(d => d.id === updatedDesain.id ? updatedDesain : d));
   };
   
+  // // Fungsi unduh yang diperbarui
   const handleDownloadAndMarkAsRead = async (desain) => {
-    console.log(`Downloading and marking as read for ID: ${desain.id}`);
+    console.log(`Downloading current image and marking as read for ID: ${desain.id}`);
 
-    if (desain.hasil_desain && desain.hasil_desain.length > 0) {
-        desain.hasil_desain.forEach((fileUrl, index) => {
-            const link = document.createElement('a');
-            link.href = fileUrl;
-            link.setAttribute('download', `desain_${desain.nama_client}_${index + 1}`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
+    // Logika unduh hanya untuk gambar yang sedang aktif
+    const currentImageIndex = activeImageIndexes[desain.id] || 0;
+    const currentFileUrl = desain.hasil_desain?.[currentImageIndex];
+
+    if (currentFileUrl) {
+      // Menggunakan link sementara untuk memicu unduhan satu file
+      const link = document.createElement('a');
+      link.href = currentFileUrl;
+      link.setAttribute('download', `desain_${desain.nama_client}_${currentImageIndex + 1}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      console.log("Download triggered for:", currentFileUrl);
+    } else {
+      console.error("No file to download at current index.");
+      alert('Tidak ada file untuk diunduh.');
     }
 
     if (desain.desain_diupdate === false) {
-        const { error } = await supabase
-            .from('desains')
-            .update({ desain_diupdate: true })
-            .eq('id', desain.id);
+      const { error } = await supabase
+        .from('desains')
+        .update({ desain_diupdate: true })
+        .eq('id', desain.id);
 
-        if (error) {
-            console.error("Error updating desain_diupdate:", error.message);
-        } else {
-            console.log("Successfully marked as read.");
-            setDesains(currentDesains =>
-                currentDesains.map(d =>
-                    d.id === desain.id ? { ...d, desain_diupdate: true } : d
-                )
-            );
-        }
+      if (error) {
+        console.error("Error updating desain_diupdate:", error.message);
+      } else {
+        console.log("Successfully marked as read.");
+        setDesains(currentDesains =>
+          currentDesains.map(d =>
+            d.id === desain.id ? { ...d, desain_diupdate: true } : d
+          )
+        );
+      }
     }
   };
 
@@ -244,7 +261,12 @@ function DesainRevisi() {
               </div>
             </div>
 
-            <ImageSlider images={desain.hasil_desain} />
+            {/* Meneruskan state indeks gambar ke ImageSlider */}
+            <ImageSlider
+              images={desain.hasil_desain}
+              currentIndex={activeImageIndexes[desain.id] || 0}
+              setCurrentIndex={(index) => setActiveImageIndexes(prev => ({ ...prev, [desain.id]: index }))}
+            />
             
             <div className="p-3">
                <div className="flex justify-end items-center space-x-2 mb-2">
@@ -279,4 +301,3 @@ function DesainRevisi() {
 }
 
 export default DesainRevisi;
-
